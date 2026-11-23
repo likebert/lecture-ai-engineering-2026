@@ -5,6 +5,7 @@
 """
 
 import json
+import random
 from functools import cache
 from pathlib import Path
 
@@ -80,49 +81,26 @@ def get_lecture_summary(lecture: int) -> str:
         return f"第{lecture}回の要点はまだありません。用意されている回: {', '.join(available)}"
     return path.read_text(encoding="utf-8")
 
+def make_quiz(lecture: int) -> str:
+    """指定した回の用語から1つを選び、確認問題と答えを返す。
 
-def search_materials(query: str) -> str:
-    """第1〜3回の本講義資料を検索し、関連ページの本文・タイトル・ページ番号を返す。
-
-    queryに調べたい内容を指定する。
+    「第2回の確認問題を出して」のように、
+    復習用の問題を求められたときに使う。
     """
-    from google.genai.errors import APIError
-    import sqlite3
-    from app.retrieval import search
+    terms = [
+        entry for entry in load_glossary()
+        if entry["lecture"] == lecture
+    ]
 
-    try:
-        return json.dumps({"results": search(query)}, ensure_ascii=False)
-    except (ValueError, FileNotFoundError, sqlite3.Error) as e:
-        return json.dumps({"error": str(e), "results": []}, ensure_ascii=False)
-    except APIError as e:
-        return json.dumps({"error": api_error_message(e.code), "results": []}, ensure_ascii=False)
+    if not terms:
+        return f"第{lecture}回の用語がないため、確認問題を作れません。"
 
+    entry = random.choice(terms)
 
-def browse_tree(node_id: str | None = None) -> str:
-    """目次とページの先頭文を返す。ページIDを指定すると全文を返す。
-
-    最初はnode_idを省略する。続いて返されたIDを指定して目次をたどる。
-    """
-    from app.retrieval import browse_tree as browse
-
-    try:
-        return json.dumps(browse(node_id), ensure_ascii=False)
-    except (ValueError, OSError) as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
-
-
-def search_graph(query: str) -> str:
-    """資料を検索し、前後ページ・共通用語をたどって関連ページの本文と引用情報を返す。
-
-    queryに調べたい内容を指定する。
-    """
-    import sqlite3
-    from google.genai.errors import APIError
-    from app.retrieval import search_graph as search
-
-    try:
-        return json.dumps(search(query), ensure_ascii=False)
-    except (ValueError, OSError, sqlite3.Error) as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
-    except APIError as e:
-        return json.dumps({"error": api_error_message(e.code)}, ensure_ascii=False)
+    return json.dumps(
+        {
+            "question": f"「{entry['term']}」の意味は？",
+            "answer": entry["definition"],
+        },
+        ensure_ascii=False,
+    )
